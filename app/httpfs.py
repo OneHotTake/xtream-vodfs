@@ -3,7 +3,7 @@
 import time
 import urllib.parse
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from pathlib import Path
 
 from fastapi import Request, Response, HTTPException
@@ -31,9 +31,11 @@ SCANNER_AGENTS = [
 
 class HTTPFilesystem:
     def __init__(self, tree: VirtualTree, media_dir: str,
-                 cache: Optional[Cache] = None):
+                 cache: Optional[Cache] = None,
+                 metadata_cache: Optional[Any] = None):
         self.tree = tree
         self.media_dir = Path(media_dir)
+        self._metadata_cache = metadata_cache
         # Scanner detection state: {client_ip: {"last_access": float, "count": int}}
         self._scan_tracker: Dict[str, Dict] = {}
         # Content-Type cache: {extension: content_type}
@@ -264,15 +266,40 @@ class HTTPFilesystem:
                 headers={"Accept-Ranges": "bytes",
                     "Content-Length": str(file_size), "Last-Modified": last_modified})
 
-        # Xtream VOD file - synthetic, no upstream call
+        # Xtream VOD file - try to use cached metadata
         if node.type == NodeType.XTREAM_VOD_FILE:
-            return Response(status_code=200,
-                media_type=node.content_type or self._get_media_type_by_name(node.name),
-                headers={
-                    "Accept-Ranges": "bytes",
-                    "Content-Length": str(1024 * 1024),  # 1MB synthetic
-                    "Last-Modified": node.last_modified.strftime("%a, %d %b %Y %H:%M:%S GMT") if node.last_modified else "Wed, 01 Jan 2020 00:00:00 GMT"
-                })
+            headers = {
+                'Accept-Ranges': 'bytes',
+            }
+
+            if node.content_type:
+                headers['Content-Type'] = node.content_type
+
+            # Try to get size from metadata cache
+            content_length = None
+            if self._metadata_cache and node.provider_name and node.stream_id:
+                metadata = self._metadata_cache.get(node.provider_name, node.stream_id)
+                if metadata and metadata.duration_secs:
+                    # Approximate size from bitrate and duration
+                    if metadata.bitrate:
+                        # bitrate in kbps, duration in seconds -> bytes
+                        content_length = int(metadata.bitrate * 1000 * metadata.duration_secs / 8)
+                    else:
+                        # Rough estimate: 5 Mbps average
+                        content_length = int(5_000_000 * metadata.duration_secs / 8)
+
+            # Fall back to synthetic size
+            if content_length is None:
+                content_length = 1024 * 1024  # 1MB synthetic
+
+            headers['Content-Length'] = str(content_length)
+
+            if node.last_modified:
+                headers['Last-Modified'] = node.last_modified.strftime('%a, %d %b %Y %H:%M:%S GMT')
+            else:
+                headers['Last-Modified'] = 'Wed, 01 Jan 2020 00:00:00 GMT'
+
+            return Response(status_code=200, headers=headers)
 
         # Regular virtual file
         content_type = self._get_media_type_by_name(node.name)

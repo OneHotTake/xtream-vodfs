@@ -6,25 +6,14 @@ Handles loading/saving config from JSON file with credential safety.
 import json
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
 import pydantic
 from pydantic import BaseModel, Field, validator
 
-
-class XtreamCredentials(BaseModel):
-    """Xtream server credentials"""
-    base_url: str = Field(default="", description="Xtream server base URL without trailing slash")
-    username: str = Field(default="", description="Xtream username")
-    password: str = Field(default="", description="Xtream password")
-
-    @validator('base_url')
-    def normalize_base_url(cls, v):
-        if v:
-            return v.rstrip('/')
-        return v
+from app.models import XtreamCredentials
 
 
 class LibrarySettings(BaseModel):
@@ -45,11 +34,29 @@ class HttpfsSettings(BaseModel):
     dir_listing_cache_ttl: int = Field(default=60, description="Directory listing cache TTL in seconds (0 = no caching)")
 
 
+class MetadataWarmerSettings(BaseModel):
+    """Settings for background metadata warming"""
+    enabled: bool = Field(default=True, description="Enable background metadata fetching")
+    concurrency: int = Field(default=12, ge=1, le=48, description="Max concurrent get_vod_info calls")
+    delay_seconds: float = Field(default=0.5, description="Delay between batches to avoid hammering")
+    retry_attempts: int = Field(default=2, description="Retry attempts per failed fetch")
+    retry_backoff_seconds: float = Field(default=5.0, description="Backoff multiplier for retries")
+    stale_after_days: int = Field(default=30, description="Re-fetch entries older than this many days")
+
+
 class Config(BaseModel):
     """Main application configuration"""
+    # Backward-compat single provider (if providers is empty, fall back to this)
     xtream: XtreamCredentials = Field(default_factory=XtreamCredentials)
+
+    # Multi-provider (primary path going forward)
+    providers: list[XtreamCredentials] = Field(default_factory=list)
+
     library: LibrarySettings = Field(default_factory=LibrarySettings)
     httpfs: HttpfsSettings = Field(default_factory=HttpfsSettings)
+
+    # Metadata warmer settings
+    metadata_warmer: MetadataWarmerSettings = Field(default_factory=MetadataWarmerSettings)
 
     class Config:
         # Extra fields allowed for future compatibility
@@ -137,7 +144,8 @@ class ConfigManager:
     def is_configured(self) -> bool:
         """Check if Xtream credentials are configured"""
         config = self.load()
-        return bool(config.xtream.base_url and config.xtream.username and config.xtream.password)
+        active_providers = get_active_providers(config)
+        return any(p.base_url and p.username and p.password for p in active_providers)
 
     def get_config_dir(self) -> Path:
         """Get the config directory path"""
@@ -165,3 +173,25 @@ def load_config() -> Config:
 def save_config(config: Config) -> None:
     """Save config via global config manager"""
     get_config_manager().save(config)
+
+
+# ===== Multi-provider helpers =====
+
+
+def is_multi_provider(config: Config) -> bool:
+    """True if providers list has entries (multi-provider mode)."""
+    return len(config.providers) > 0
+
+
+def get_active_providers(config: Config) -> list[XtreamCredentials]:
+    """Return the list of active providers, handling single/multi modes."""
+    if config.providers:
+        return config.providers
+    if config.xtream.provider_name and config.xtream.base_url:
+        return [config.xtream]
+    return []
+
+
+def get_metadata_cache_path(config_manager: ConfigManager) -> Path:
+    """Get the metadata cache file path."""
+    return config_manager.get_config_dir() / 'metadata_cache.json'

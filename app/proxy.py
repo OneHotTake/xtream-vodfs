@@ -16,7 +16,8 @@ import httpx
 from fastapi import Response
 from fastapi.responses import StreamingResponse, RedirectResponse
 
-from app.models import FSNode, NodeType
+from app.config import get_active_providers
+from app.models import FSNode, NodeType, XtreamCredentials
 
 
 logger = logging.getLogger(__name__)
@@ -272,6 +273,7 @@ async def stream_vod_from_node(
     range_header: Optional[str] = None,
     timeout: Optional[float] = None,
     enable_cdn_direct: bool = False,
+    provider_creds: Optional[XtreamCredentials] = None,
 ) -> Response:
     """
     Stream VOD file from FSNode with Range header support.
@@ -279,26 +281,51 @@ async def stream_vod_from_node(
     When enable_cdn_direct is True and no Range header is present, returns a 302 redirect
     to the direct upstream/CDN URL (bypassing the local proxy). HEAD requests always remain local.
 
+    In multi-provider mode, resolves the upstream URL from the node's provider_name
+    and the corresponding provider credentials in config.
+
     Args:
         node: FSNode with xtream_vod_file type
         range_header: Optional Range header value
         timeout: Request timeout in seconds (defaults to UPSTREAM_TIMEOUT env var)
         enable_cdn_direct: When True, expose CDN URL via X-Cdn-Url header (and 302 redirect for GET)
+        provider_creds: Optional credentials for multi-provider mode
 
     Returns:
         Response with appropriate headers (StreamingResponse or RedirectResponse)
 
     Raises:
-        ValueError: If node is not xtream_vod_file type
+        ValueError: If node is not xtream_vod_file type or credentials missing
         ProxyError: If streaming fails
     """
     if node.type != NodeType.XTREAM_VOD_FILE:
         raise ValueError(f"Expected xtream_vod_file node, got {node.type}")
 
-    if not node.upstream_url:
-        raise ValueError("Node missing upstream_url")
+    # Build upstream URL from node's provider_name
+    upstream_url = None
 
-    safe_url = sanitize_url(node.upstream_url)
+    # Try to get credentials from config based on provider_name
+    if node.provider_name:
+        from app.config import load_config
+        config = load_config()
+        for creds in get_active_providers(config):
+            if creds.provider_name == node.provider_name:
+                base_url = creds.base_url.rstrip('/')
+                username = creds.username
+                password = creds.password
+                stream_id = node.stream_id
+                extension = node.container_extension or 'mp4'
+                upstream_url = f"{base_url}/movie/{username}/{password}/{stream_id}.{extension}"
+                break
+
+    if not upstream_url:
+        # Fallback to stored URL
+        upstream_url = node.upstream_url
+
+    if not upstream_url:
+        raise ValueError("Cannot determine upstream URL - missing credentials")
+
+    safe_url = sanitize_url(upstream_url)
     logger.info(f"Streaming VOD file: {node.name} from {safe_url}")
 
     # When CDN direct is enabled and no Range header, redirect directly to upstream
@@ -307,18 +334,18 @@ async def stream_vod_from_node(
     if enable_cdn_direct and not range_header:
         logger.info(f"CDN direct enabled: redirecting to {safe_url}")
         return RedirectResponse(
-            url=node.upstream_url,
+            url=upstream_url,
             status_code=302,
-            headers={"X-Cdn-Url": node.upstream_url}
+            headers={"X-Cdn-Url": upstream_url}
         )
 
     # Normal proxied streaming with optional X-Cdn-Url header
     return await stream_vod_file(
-        node.upstream_url,
+        upstream_url,
         range_header,
         timeout,
         add_cdn_header=enable_cdn_direct,
-        cdn_url=node.upstream_url,
+        cdn_url=upstream_url,
     )
 
 

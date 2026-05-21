@@ -5,9 +5,13 @@ streaming reliability, rate limiting, and head_mode caching.
 """
 
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Request, Response, HTTPException, Form, status
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -15,10 +19,12 @@ from pydantic import BaseModel
 
 from app.tree import VirtualTree
 from app.httpfs import HTTPFilesystem
-from app.config import Config, ConfigManager, get_config_manager, load_config, save_config
+from app.config import Config, ConfigManager, get_config_manager, get_active_providers, load_config, save_config
 from app.cache import Cache, get_cache
+from app.metadata_cache import MetadataCache, get_metadata_cache
 from app.xtream import XtreamClient, validate_credentials
 from app.proxy import stream_vod_from_node, get_rate_limiter
+from app.warmer import MetadataWarmer
 from app.models import NodeType
 
 
@@ -33,6 +39,8 @@ config: Optional[Config] = None
 cache: Optional[Cache] = None
 tree: Optional[VirtualTree] = None
 httpfs: Optional[HTTPFilesystem] = None
+metadata_cache: Optional[MetadataCache] = None
+warmer: Optional[MetadataWarmer] = None
 
 
 class ConfigForm(BaseModel):
@@ -48,7 +56,7 @@ class ConfigForm(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize app components on startup"""
-    global config_manager, config, cache, tree, httpfs
+    global config_manager, config, cache, tree, httpfs, metadata_cache, warmer
 
     config_manager = get_config_manager()
     config = config_manager.load()
@@ -60,12 +68,30 @@ async def startup_event():
     if cache_loaded:
         print(f"Loaded cache from disk: {len(cache.vod_categories)} categories, {len(cache.vod_streams)} streams")
 
-    # Build tree with cache and config
-    tree = VirtualTree(cache=cache if not cache.is_empty else None, config=config)
-    httpfs = HTTPFilesystem(tree, str(MEDIA_DIR),
-                            cache=cache if not cache.is_empty else None)
+    # Load metadata cache
+    metadata_cache = get_metadata_cache()
+    metadata_cache_loaded = metadata_cache.load_from_disk()
+    if metadata_cache_loaded:
+        print(f"Loaded metadata cache from disk: {metadata_cache.count()} entries")
 
-    # Apply HTTP filesystem config from settings
+    # Build tree
+    active_providers = get_active_providers(config)
+    if active_providers:
+        # Multi-provider mode: try to refresh to get full data
+        if cache_loaded:
+            try:
+                await refresh_vod_cache()
+            except Exception as e:
+                logger.warning(f"Failed to refresh cache on startup: {e}")
+                # Fall back to single-provider mode with existing cache
+                tree = VirtualTree(cache=cache if not cache.is_empty else None, config=config)
+        else:
+            tree = VirtualTree(cache=None, config=config)
+    else:
+        # Single-provider mode or not configured
+        tree = VirtualTree(cache=cache if not cache.is_empty else None, config=config)
+
+    httpfs = HTTPFilesystem(tree, str(MEDIA_DIR), metadata_cache=metadata_cache)
     _apply_httpfs_config()
 
 
@@ -79,41 +105,74 @@ def _apply_httpfs_config():
 
 
 async def refresh_vod_cache():
-    """Refresh VOD categories and streams from Xtream server"""
-    global config, cache, tree, httpfs
+    """Refresh VOD cache for all configured providers."""
+    global config, cache, tree, httpfs, metadata_cache, warmer
 
-    if not config or not config_manager or not config_manager.is_configured():
-        raise HTTPException(status_code=400, detail="Xtream credentials not configured")
+    if not config or not config_manager:
+        raise HTTPException(status_code=400, detail="Config not loaded")
+
+    active_providers = get_active_providers(config)
+    if not active_providers:
+        raise HTTPException(status_code=400, detail="No Xtream providers configured")
 
     try:
-        async with XtreamClient(config.xtream, timeout=30.0) as client:
-            # Validate credentials first
-            await client.validate_account()
+        all_categories = []
+        all_streams = []
+        providers_data = []          # For warmer: (name, creds, streams)
+        providers_tree_data = []     # For tree: (name, categories, streams)
 
-            # Fetch categories and streams
-            categories = await client.get_vod_categories()
-            streams = await client.get_vod_streams()
+        # Fetch data from each provider
+        for creds in active_providers:
+            async with XtreamClient(creds, timeout=30.0) as client:
+                # Validate credentials
+                await client.validate_account()
 
-            # Update cache
-            if cache:
-                cache.refresh(categories, streams)
-                cache.save_to_disk()
+                # Fetch categories and streams
+                categories = await client.get_vod_categories()
+                streams = await client.get_vod_streams()
 
-            # Rebuild tree
-            tree = VirtualTree(cache=cache if cache and not cache.is_empty else None, config=config)
-            non_empty_cache = cache if cache and not cache.is_empty else None
-            httpfs = HTTPFilesystem(tree, str(MEDIA_DIR),
-                                    cache=non_empty_cache)
-            _apply_httpfs_config()
+                all_categories.extend(categories)
+                all_streams.extend(streams)
 
-            return len(categories), len(streams)
+                # Store for tree building (needs categories + streams)
+                providers_tree_data.append((creds.provider_name, categories, streams))
+                # Store for warming (needs credentials)
+                providers_data.append((creds.provider_name, creds, streams))
+
+                logger.info(
+                    f"Fetched {len(categories)} categories and {len(streams)} streams "
+                    f"from provider {creds.provider_name}"
+                )
+
+        # Update cache with all data
+        if cache:
+            cache.refresh(all_categories, all_streams)
+            cache.save_to_disk()
+
+        # Build tree with multi-provider data
+        tree = VirtualTree(
+            cache=cache if cache and not cache.is_empty else None,
+            config=config,
+            providers=providers_tree_data
+        )
+        httpfs = HTTPFilesystem(tree, str(MEDIA_DIR), metadata_cache=metadata_cache)
+        _apply_httpfs_config()
+
+        # Start warmer in background
+        if config.metadata_warmer.enabled and metadata_cache:
+            global warmer
+            warmer = MetadataWarmer(metadata_cache, providers_data, config.metadata_warmer)
+            asyncio.create_task(warmer.start())
+
+        return sum(len(cats) for _, cats, _ in providers_tree_data), sum(len(streams) for _, _, streams in providers_tree_data)
 
     except Exception as e:
-        # Sanitize error message - don't expose credentials
+        # Sanitize error message
         error_msg = str(e)
-        # Remove any potential credential information from error message
-        if config and config.xtream:
-            error_msg = error_msg.replace(config.xtream.username, "USERNAME").replace(config.xtream.password, "PASSWORD")
+        if config:
+            for creds in get_active_providers(config):
+                error_msg = error_msg.replace(creds.username, "USERNAME")
+                error_msg = error_msg.replace(creds.password, "PASSWORD")
         raise HTTPException(status_code=500, detail=f"Failed to refresh VOD cache: {error_msg}")
 
 
@@ -335,6 +394,12 @@ def head_fs(request: Request, path: str = ""):
             httpfs._track_scanner_access(request)
         return httpfs.head_directory(path, has_trailing_slash=path.endswith("/")) if httpfs else Response(status_code=503, content="Server not ready")
     else:
+        # For Xtream VOD files, trigger lazy fetch if metadata missing
+        if node.type == NodeType.XTREAM_VOD_FILE and node.provider_name and node.stream_id and warmer and metadata_cache:
+            if not metadata_cache.has(node.provider_name, node.stream_id):
+                # Fire-and-forget lazy fetch - does not block HEAD response
+                asyncio.create_task(warmer.request_single(node.provider_name, node.stream_id))
+
         return httpfs.head_file(path) if httpfs else Response(status_code=503, content="Server not ready")
 
 

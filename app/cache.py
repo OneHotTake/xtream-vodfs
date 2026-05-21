@@ -145,6 +145,38 @@ class Cache:
         self._last_refresh = datetime.now()
         logger.info(f"Cache refreshed at {self._last_refresh}")
 
+    def set_provider_data(self, provider_name: str, categories: List[XtreamCategory], streams: List[XtreamVodStream]) -> None:
+        """
+        Set VOD categories and streams for a specific provider.
+
+        Stores data with provider-prefixed IDs to avoid collisions
+        when multiple providers are configured.
+
+        Args:
+            provider_name: Provider identifier
+            categories: List of VOD categories
+            streams: List of VOD streams
+        """
+        # Store with provider prefix to avoid collisions
+        prefixed_categories = []
+        prefixed_streams = []
+
+        for cat in categories:
+            # Create a copy with provider-scoped ID
+            cat_dict = cat.dict()
+            cat_dict['category_id'] = f"{provider_name}:{cat.category_id}"
+            prefixed_categories.append(XtreamCategory(**cat_dict))
+
+        for stream in streams:
+            # Create a copy with provider prefix
+            stream_dict = stream.dict()
+            stream_dict['stream_id'] = f"{provider_name}:{stream.stream_id}"
+            stream_dict['category_id'] = f"{provider_name}:{stream.category_id}"
+            prefixed_streams.append(XtreamVodStream(**stream_dict))
+
+        self.set_vod_categories(prefixed_categories)
+        self.set_vod_streams(prefixed_streams)
+
     def clear(self) -> None:
         """Clear all cached data"""
         self._vod_categories = None

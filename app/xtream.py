@@ -14,6 +14,7 @@ from app.models import (
     XtreamCategory,
     XtreamVodStream,
     XtreamValidationResponse,
+    VodStreamMetadata,
 )
 from app.config import XtreamCredentials
 
@@ -251,6 +252,107 @@ class XtreamClient:
 
         logger.info(f"Fetched {len(streams)} VOD streams from Xtream (category: {category_id or 'all'})")
         return streams
+
+    async def get_vod_info(self, vod_id: str) -> Optional[VodStreamMetadata]:
+        """
+        Fetch enriched metadata for a VOD stream.
+
+        Args:
+            vod_id: VOD/stream ID to fetch metadata for
+
+        Returns:
+            VodStreamMetadata or None if not found or fetch fails
+
+        Raises:
+            XtreamApiError: If API request fails
+        """
+        client = await self._get_or_create_client()
+
+        # Try both parameter names (provider variance)
+        for param_name in ['vod_id', 'stream_id']:
+            url = self._build_url(action='get_vod_info', params={param_name: vod_id})
+
+            try:
+                response = await client.get(url)
+
+                # If 404 with wrong parameter name, try the next one
+                if response.status_code == 404:
+                    continue
+
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    continue
+                logger.error(f"Xtream API error fetching vod_info: {e}")
+                raise XtreamApiError(f"HTTP error: {e.response.status_code}") from e
+            except httpx.RequestError as e:
+                logger.error(f"Xtream connection error fetching vod_info: {e}")
+                raise XtreamApiError(f"Connection error: {str(e)}") from e
+
+            try:
+                data = response.json()
+            except ValueError as e:
+                logger.error(f"Xtream returned invalid JSON for vod_info: {e}")
+                raise XtreamApiError("Invalid response from server") from e
+
+            # Parse response safely
+            try:
+                # Response structure: {"info": {...}, "movie_data": {...}}
+                info = data.get('info', {})
+                movie_data = data.get('movie_data', {})
+
+                # Build VodStreamMetadata from info + movie_data
+                metadata_dict = {}
+
+                # Fields from info
+                if 'name' in info:
+                    metadata_dict['name'] = info['name']
+                if 'plot' in info:
+                    metadata_dict['plot'] = info['plot']
+                if 'cast' in info:
+                    metadata_dict['cast'] = info['cast']
+                if 'director' in info:
+                    metadata_dict['director'] = info['director']
+                if 'genre' in info:
+                    metadata_dict['genre'] = info['genre']
+                if 'duration' in info:
+                    metadata_dict['duration'] = info['duration']
+                if 'duration_secs' in info:
+                    metadata_dict['duration_secs'] = info['duration_secs']
+                if 'bitrate' in info:
+                    metadata_dict['bitrate'] = info['bitrate']
+                if 'rating' in info:
+                    metadata_dict['rating'] = info['rating']
+                if 'tmdb_id' in info:
+                    metadata_dict['tmdb_id'] = info['tmdb_id']
+                if 'releasedate' in info:
+                    metadata_dict['releasedate'] = info['releasedate']
+                if 'movie_image' in info:
+                    metadata_dict['movie_image'] = info['movie_image']
+                if 'backdrop_path' in info:
+                    metadata_dict['backdrop_path'] = info['backdrop_path']
+                if 'youtube_trailer' in info:
+                    metadata_dict['youtube_trailer'] = info['youtube_trailer']
+                if 'video' in info:
+                    metadata_dict['video'] = info['video']
+                if 'audio' in info:
+                    metadata_dict['audio'] = info['audio']
+
+                # Add timestamp
+                metadata_dict['fetched_at'] = datetime.now()
+
+                metadata = VodStreamMetadata(**metadata_dict)
+                logger.info(f"Fetched vod_info for {vod_id} from {self.credentials.provider_name}")
+                return metadata
+
+            except Exception as e:
+                logger.warning(f"Failed to parse vod_info response for {vod_id}: {e}")
+                # Return None instead of raising - missing metadata is not fatal
+                return None
+
+        # Neither parameter name worked
+        logger.warning(f"No vod_info found for ID {vod_id}")
+        return None
 
     def build_vod_stream_url(self, stream: XtreamVodStream) -> str:
         """

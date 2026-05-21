@@ -84,6 +84,10 @@ pids
 *.pid
 *.seed
 *.pid.lock
+.pids/
+
+# Rclone cache
+.rclone-cache/
 
 # Coverage directory
 coverage/

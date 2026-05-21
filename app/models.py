@@ -1,10 +1,39 @@
 """Data models for xtream-vodfs"""
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field, validator
+
+
+class XtreamCredentials(BaseModel):
+    """Xtream server credentials with multi-provider support"""
+    provider_name: str = Field(
+        default="",
+        min_length=1,
+        description="Stable unique identifier for this provider (e.g., 'real-debrid', 'super-iptv'). Used in cache keys and filesystem paths."
+    )
+    base_url: str = Field(default="", description="Xtream server base URL without trailing slash")
+    username: str = Field(default="", description="Xtream username")
+    password: str = Field(default="", description="Xtream password")
+
+    @validator('provider_name')
+    def sanitize_provider_name(cls, v):
+        v = v.strip().lower()
+        v = re.sub(r'[^a-z0-9_-]', '-', v)
+        v = re.sub(r'-+', '-', v)
+        v = v.strip('-')
+        if not v:
+            raise ValueError("provider_name cannot be empty")
+        return v
+
+    @validator('base_url')
+    def normalize_base_url(cls, v):
+        if v:
+            return v.rstrip('/')
+        return v
 
 
 class NodeType(str, Enum):
@@ -31,6 +60,7 @@ class FSNode:
     container_extension: Optional[str] = None
     upstream_url: Optional[str] = None
     content_type: Optional[str] = None
+    provider_name: Optional[str] = None
 
     def is_directory(self) -> bool:
         return self.type == NodeType.DIRECTORY
@@ -183,6 +213,30 @@ class XtreamValidationResponse(BaseModel):
     """Response from player_api.php authentication"""
     user_info: Optional[XtreamUserInfo] = Field(None, description="User information if authenticated")
     server_info: Optional[Dict[str, Any]] = Field(None, description="Server information")
+
+    class Config:
+        extra = 'ignore'
+
+
+class VodStreamMetadata(BaseModel):
+    """Enriched metadata from get_vod_info API. All fields optional due to provider variance."""
+    name: Optional[str] = None
+    plot: Optional[str] = None
+    cast: Optional[str] = None
+    director: Optional[str] = None
+    genre: Optional[str] = None
+    duration: Optional[str] = None
+    duration_secs: Optional[int] = None
+    bitrate: Optional[int] = None
+    rating: Optional[float] = None
+    tmdb_id: Optional[int] = None
+    releasedate: Optional[str] = None
+    movie_image: Optional[str] = None
+    backdrop_path: Optional[list] = None
+    youtube_trailer: Optional[str] = None
+    video: Optional[dict] = None  # opaque — provider varies
+    audio: Optional[dict] = None  # opaque — provider varies
+    fetched_at: Optional[datetime] = None
 
     class Config:
         extra = 'ignore'
