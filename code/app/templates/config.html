@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <style>
+    :root {
+      --bg-body: #f5f6f8;
+      --bg-card: rgba(128,128,128,0.04);
+      --bg-card-hover: rgba(128,128,128,0.07);
+      --border-color: rgba(128,128,128,0.15);
+      --border-strong: rgba(128,128,128,0.3);
+      --text-primary: #1a1a1a;
+      --text-secondary: rgba(0,0,0,0.55);
+      --text-muted: rgba(0,0,0,0.4);
+      --accent-green: #52B54B;
+      --accent-red: #cc0000;
+      --accent-blue: #3498db;
+      --accent-orange: #e67e22;
+      --accent-green-bg: rgba(82,181,75,0.12);
+      --accent-red-bg: rgba(204,0,0,0.08);
+      --accent-blue-bg: rgba(52,152,219,0.08);
+      --accent-orange-bg: rgba(230,126,34,0.08);
+      --input-bg: #ffffff;
+      --input-border: rgba(128,128,128,0.25);
+      --btn-primary-bg: #52B54B;
+      --btn-primary-hover: #46a040;
+      --btn-secondary-bg: transparent;
+      --btn-secondary-border: rgba(128,128,128,0.35);
+      --btn-danger-bg: #c0392b;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-lg: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-body: #121212;
+        --bg-card: rgba(255,255,255,0.04);
+        --bg-card-hover: rgba(255,255,255,0.07);
+        --border-color: rgba(255,255,255,0.12);
+        --border-strong: rgba(255,255,255,0.22);
+        --text-primary: #eaeaea;
+        --text-secondary: rgba(255,255,255,0.55);
+        --text-muted: rgba(255,255,255,0.35);
+        --input-bg: rgba(255,255,255,0.06);
+        --input-border: rgba(255,255,255,0.2);
+        --btn-secondary-border: rgba(255,255,255,0.3);
+        --shadow: 0 1px 3px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.3);
+        --shadow-lg: 0 4px 12px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.4);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+    }
+
+    /* Header */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .sprint-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--accent-green-bg);
+      color: var(--accent-green);
+      border: 1px solid rgba(82,181,75,0.25);
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 28px;
+      border-bottom: 2px solid var(--border-color);
+    }
+    .tab-btn {
+      padding: 10px 22px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: color 0.2s, border-color 0.2s, opacity 0.2s;
+      opacity: 0.75;
+    }
+    .tab-btn:hover {
+      opacity: 1;
+      color: var(--text-primary);
+    }
+    .tab-btn.active {
+      opacity: 1;
+      color: var(--text-primary);
+      border-bottom-color: var(--accent-green);
+    }
+
+    /* Panels */
+    .tab-panel { display: none; animation: fadeIn 0.25s ease; }
+    .tab-panel.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .card:hover {
+      box-shadow: var(--shadow-lg);
+      border-color: var(--border-strong);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card-title {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 700;
+      opacity: 0.9;
+    }
+    .card-subtitle {
+      margin: -10px 0 14px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Status badges */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .status-badge.success {
+      background: var(--accent-green-bg);
+      color: var(--accent-green);
+    }
+    .status-badge.failed {
+      background: var(--accent-red-bg);
+      color: var(--accent-red);
+    }
+    .status-badge.running {
+      background: var(--accent-blue-bg);
+      color: var(--accent-blue);
+    }
+    .status-badge.idle {
+      background: rgba(128,128,128,0.1);
+      color: var(--text-muted);
+    }
+    .status-badge.warning {
+      background: var(--accent-orange-bg);
+      color: var(--accent-orange);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .status-dot.success { background: var(--accent-green); }
+    .status-dot.failed { background: var(--accent-red); }
+    .status-dot.running { background: var(--accent-blue); }
+    .status-dot.idle { background: var(--text-muted); }
+    .status-dot.warning { background: var(--accent-orange); }
+
+    /* Health bar */
+    .health-bar {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      padding: 10px 14px;
+      margin-bottom: 18px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+    }
+    .health-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 12px;
+    }
+    .stat-box {
+      text-align: center;
+      padding: 14px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      transition: transform 0.15s, border-color 0.2s;
+    }
+    .stat-box:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent-green);
+      line-height: 1.1;
+    }
+    .stat-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Quick actions */
+    .actions-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+      line-height: 1.4;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: var(--btn-primary-bg);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--btn-primary-hover); }
+    .btn-secondary {
+      background: var(--btn-secondary-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--btn-secondary-border);
+    }
+    .btn-secondary:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+    .btn-danger {
+      background: var(--btn-danger-bg);
+      color: #fff;
+    }
+    .btn-danger:hover { background: #a93226; }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    .btn.loading .spinner { display: inline-block; }
+    .btn.loading .btn-text { opacity: 0.7; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Result pills */
+    .result-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      border-left: 3px solid;
+      font-size: 0.88rem;
+      margin-top: 10px;
+      animation: fadeIn 0.25s ease;
+    }
+    .result-pill.success { border-color: var(--accent-green); background: var(--accent-green-bg); color: var(--accent-green); }
+    .result-pill.error   { border-color: var(--accent-red);   background: var(--accent-red-bg);   color: var(--accent-red); }
+    .result-pill.info    { border-color: var(--accent-blue);  background: var(--accent-blue-bg);  color: var(--accent-blue); }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state-icon {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      opacity: 0.4;
+    }
+    .empty-state-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    /* Forms */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+    .form-hint {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 0.92rem;
+      font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--accent-green);
+      box-shadow: 0 0 0 3px rgba(82,181,75,0.12);
+    }
+    .form-input::placeholder { color: var(--text-muted); opacity: 0.7; }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .checkbox-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent-green);
+      cursor: pointer;
+    }
+    .checkbox-row .checkbox-label {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .checkbox-row .checkbox-hint {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: 28px;
+    }
+
+    /* Section card (settings) */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .section-title {
+      margin: 0 0 16px 0;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.95rem;
+      font-weight: 700;
+      opacity: 0.9;
+    }
+
+    /* Sticky footer for save */
+    .sticky-footer {
+      position: sticky;
+      bottom: 0;
+      padding: 14px 0 6px;
+      background: linear-gradient(to bottom, transparent, var(--bg-body) 35%);
+      z-index: 10;
+      margin-top: 8px;
+    }
+    .footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .page-wrap { padding: 16px 12px 48px; }
+      .page-header h1 { font-size: 1.15rem; }
+      .tab-btn { padding: 8px 14px; font-size: 0.88rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .health-bar { gap: 12px; }
+    }
+
+    /* Links */
+    a { color: var(--accent-green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      padding: 12px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fff;
+      box-shadow: var(--shadow-lg);
+      z-index: 1000;
+      transform: translateX(120%);
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+      max-width: 320px;
+    }
+    .toast.show { transform: translateX(0); }
+    .toast.success { background: var(--accent-green); }
+    .toast.error { background: var(--accent-red); }
+    .toast.info { background: var(--accent-blue); }
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- Header -->
+  <div class="page-header">
+    <h1>{{ title }}</h1>
+    <span class="sprint-badge">Sprint {{ sprint }}</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar" role="tablist">
+    <button type="button" class="tab-btn active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+    <button type="button" class="tab-btn" data-tab="settings" role="tab" aria-selected="false">Settings</button>
+  </div>
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="tab-panel active" id="panel-dashboard" role="tabpanel">
+
+    <!-- Health Bar -->
+    <div class="health-bar">
+      <div class="health-item">
+        <span class="status-dot {% if xtream_configured and validation_status == 'success' %}success{% elif validation_status == 'failed' %}failed{% else %}idle{% endif %}"></span>
+        <span>Xtream: {% if xtream_configured %}{% if validation_status == 'success' %}Connected{% elif validation_status == 'failed' %}Connection Failed{% else %}Configured{% endif %}{% else %}Not Configured{% endif %}</span>
+      </div>
+      <div class="health-item">
+        <span class="status-dot {% if last_refresh %}success{% else %}idle{% endif %}"></span>
+        <span>Last Refresh: {% if last_refresh %}{{ last_refresh.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}</span>
+      </div>
+      <div class="health-item" style="opacity:0.5;">
+        Version 0.1.0
+      </div>
+    </div>
+
+    {% if not xtream_configured %}
+    <!-- Empty state: not configured -->
+    <div class="card">
+      <div class="empty-state">
+        <div class="empty-state-icon">&#9889;</div>
+        <div class="empty-state-title">Configure your Xtream connection to get started</div>
+        <p>Enter your Xtream Codes credentials in the Settings tab to begin.</p>
+        <button type="button" class="btn btn-primary" onclick="switchTab('settings')" style="margin-top:10px;">Open Settings &rarr;</button>
+      </div>
+    </div>
+    {% else %}
+
+    <!-- Stats Grid -->
+    <div class="stats-grid" style="margin-bottom:18px;">
+      <div class="stat-box">
+        <div class="stat-value">{{ vod_categories_count }}</div>
+        <div class="stat-label">VOD Categories</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">{{ vod_streams_count }}</div>
+        <div class="stat-label">VOD Streams</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">{{ last_refresh.strftime('%H:%M') if last_refresh else '--:--' }}</div>
+        <div class="stat-label">Last Refresh</div>
+      </div>
+    </div>
+
+    <!-- Connection Status Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Connection Status</h3>
+        {% if validation_status == 'success' %}
+          <span class="status-badge success"><span class="status-dot success"></span> Valid</span>
+        {% elif validation_status == 'failed' %}
+          <span class="status-badge failed"><span class="status-dot failed"></span> Failed</span>
+        {% else %}
+          <span class="status-badge idle"><span class="status-dot idle"></span> Not Tested</span>
+        {% endif %}
+      </div>
+      {% if validation_message %}
+        <p style="margin:0; font-size:0.9rem; color:var(--text-secondary);">{{ validation_message }}</p>
+      {% else %}
+        <p style="margin:0; font-size:0.9rem; color:var(--text-muted);">No validation performed yet. Use Test Connection in Settings.</p>
+      {% endif %}
+    </div>
+
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Quick Actions</h3>
+      </div>
+      <div class="actions-row">
+        <button type="button" id="btnRefresh" class="btn btn-primary" onclick="doRefresh()">
+          <span class="spinner"></span>
+          <span class="btn-text">Refresh VOD</span>
+        </button>
+        <a href="/fs/" class="btn btn-secondary">Browse /fs/</a>
+        <a href="/fs/movies/" class="btn btn-secondary">Browse Movies</a>
+      </div>
+      <div id="refreshResult"></div>
+      {% if not last_refresh %}
+      <p style="margin:10px 0 0; font-size:0.82rem; color:var(--text-muted);">No sync has run yet — click Refresh VOD to populate the library.</p>
+      {% endif %}
+    </div>
+
+    <!-- FS Links Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Virtual Filesystem</h3>
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <a href="/fs/" class="btn btn-secondary">/fs/</a>
+        <a href="/fs/movies/" class="btn btn-secondary">/fs/movies/</a>
+        <a href="/fs/series/" class="btn btn-secondary">/fs/series/</a>
+        <a href="/healthz" class="btn btn-secondary">/healthz</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SETTINGS ===== -->
+  <div class="tab-panel" id="panel-settings" role="tabpanel">
+    <form id="configForm" onsubmit="return false;">
+
+      <!-- Xtream Connection -->
+      <div class="section-card">
+        <h2 class="section-title">Xtream Connection</h2>
+
+        <div class="form-group">
+          <label class="form-label" for="base_url">Server URL</label>
+          <input class="form-input" id="base_url" name="base_url" type="text"
+                 placeholder="http://example.com:8080"
+                 value="{{ config.get('base_url','') }}" autocomplete="off">
+          <div class="form-hint">Base URL of your Xtream-compatible server, without trailing slash.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <input class="form-input" id="username" name="username" type="text"
+                 value="{{ config.get('username','') }}" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input class="form-input" id="password" name="password" type="password"
+                 value="{{ config.get('password','') }}" autocomplete="off">
+          <div class="form-hint">Your Xtream API password. Never shared or logged in plaintext.</div>
+        </div>
+
+        <div class="actions-row" style="margin-top:4px;">
+          <button type="button" id="btnTest" class="btn btn-secondary" onclick="doTestConnection()">
+            <span class="spinner"></span>
+            <span class="btn-text">Test Connection</span>
+          </button>
+        </div>
+        <div id="testResult"></div>
+      </div>
+
+      <!-- Library Settings -->
+      <div class="section-card">
+        <h2 class="section-title">Library Settings</h2>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="enable_vod" name="enable_vod"
+                 {% if config.get('enable_vod', True) %}checked{% endif %}>
+          <span class="checkbox-label">Enable VOD Movies</span>
+        </label>
+        <div class="checkbox-hint" style="margin-top:-6px; margin-bottom:12px;">Expose VOD movie categories in the virtual filesystem.</div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="enable_series" name="enable_series"
+                 {% if config.get('enable_series', False) %}checked{% endif %}>
+          <span class="checkbox-label">Enable Series</span>
+        </label>
+        <div class="checkbox-hint" style="margin-top:-6px; margin-bottom:12px;">Expose series categories in the virtual filesystem.</div>
+
+        <div class="form-group">
+          <label class="form-label" for="category_filters">Category Filters</label>
+          <input class="form-input" id="category_filters" name="category_filters" type="text"
+                 placeholder="e.g. English,4K,Action"
+                 value="{{ config.get('category_filters','') }}" autocomplete="off">
+          <div class="form-hint">Comma-separated list of category names to include. Leave empty to include all.</div>
+        </div>
+      </div>
+
+      <!-- HTTPFS Settings -->
+      <div class="section-card">
+        <h2 class="section-title">HTTPFS Settings</h2>
+
+        <div class="form-group">
+          <label class="form-label" for="head_mode">HEAD Response Mode</label>
+          <select class="form-select" id="head_mode" name="head_mode">
+            <option value="auto" {% if config.get('head_mode','auto')=='auto' %}selected{% endif %}>Auto (detect from extension)</option>
+            <option value="always_200" {% if config.get('head_mode')=='always_200' %}selected{% endif %}>Always 200 OK</option>
+            <option value="always_404" {% if config.get('head_mode')=='always_404' %}selected{% endif %}>Always 404 Not Found</option>
+          </select>
+          <div class="form-hint">Controls how HEAD requests respond. Auto is recommended for rclone compatibility.</div>
+        </div>
+      </div>
+
+      <!-- Save Footer -->
+      <div class="sticky-footer">
+        <div class="footer-actions">
+          <button type="button" id="btnSave" class="btn btn-primary" onclick="doSaveConfig()">
+            <span class="spinner"></span>
+            <span class="btn-text">Save Configuration</span>
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('configForm').reset()">Reset Changes</button>
+        </div>
+        <div id="saveResult"></div>
+      </div>
+
+    </form>
+  </div>
+
+</div>
+
+<!-- Toast container -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  // ===== Tab Switching =====
+  function switchTab(tabName) {
+    var panels = document.querySelectorAll('.tab-panel');
+    var btns = document.querySelectorAll('.tab-btn');
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].classList.remove('active');
+    }
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.remove('active');
+      btns[i].setAttribute('aria-selected', 'false');
+    }
+    var targetPanel = document.getElementById('panel-' + tabName);
+    var targetBtn = document.querySelector('.tab-btn[data-tab="' + tabName + '"]');
+    if (targetPanel) targetPanel.classList.add('active');
+    if (targetBtn) {
+      targetBtn.classList.add('active');
+      targetBtn.setAttribute('aria-selected', 'true');
+    }
+    // Update URL hash for direct linking
+    if (history.replaceState) {
+      history.replaceState(null, null, '#' + tabName);
+    }
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      switchTab(this.getAttribute('data-tab'));
+    });
+  });
+
+  // Restore tab from hash
+  (function() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash === 'settings' || hash === 'dashboard') {
+      switchTab(hash);
+    }
+  })();
+
+  // ===== Helpers =====
+  function setButtonLoading(id, loading) {
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.classList.toggle('loading', loading);
+  }
+
+  function showResult(elId, type, message) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    var typeClass = type === 'success' ? 'success' : (type === 'error' ? 'error' : 'info');
+    el.innerHTML = '<div class="result-pill ' + typeClass + '">' + escapeHtml(message) + '</div>';
+  }
+
+  function clearResult(elId) {
+    var el = document.getElementById(elId);
+    if (el) el.innerHTML = '';
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    var toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = 'toast ' + (type || 'info');
+    toast.classList.add('show');
+    setTimeout(function() {
+      toast.classList.remove('show');
+    }, 3200);
+  }
+
+  // ===== Actions =====
+  function doTestConnection() {
+    clearResult('testResult');
+    var url = document.getElementById('base_url').value.trim().replace(/\/+$/, '');
+    var username = document.getElementById('username').value.trim();
+    var password = document.getElementById('password').value;
+
+    if (!url || !username || !password) {
+      showResult('testResult', 'error', 'Please enter Server URL, Username, and Password.');
+      return;
+    }
+
+    setButtonLoading('btnTest', true);
+
+    var testUrl = url + '/player_api.php?username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password);
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', testUrl, true);
+    xhr.timeout = 12000;
+
+    xhr.onload = function() {
+      setButtonLoading('btnTest', false);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          var resp = JSON.parse(xhr.responseText);
+          if (resp.user_info) {
+            var status = resp.user_info.status || 'unknown';
+            var msg = 'Connected as ' + escapeHtml(username) + ' — status: ' + escapeHtml(status);
+            if (resp.user_info.active_cons !== undefined) {
+              msg += ', ' + resp.user_info.active_cons;
+              if (resp.user_info.max_connections !== undefined) {
+                msg += '/' + resp.user_info.max_connections;
+              }
+              msg += ' active streams';
+            }
+            showResult('testResult', 'success', msg);
+          } else {
+            showResult('testResult', 'success', 'Connection successful!');
+          }
+        } catch (e) {
+          showResult('testResult', 'success', 'Connection successful (non-JSON response).');
+        }
+      } else if (xhr.status === 401) {
+        showResult('testResult', 'error', 'Authentication failed (401). Check credentials.');
+      } else if (xhr.status === 404) {
+        showResult('testResult', 'error', 'API endpoint not found (404). Check base URL.');
+      } else {
+        showResult('testResult', 'error', 'Connection failed (HTTP ' + xhr.status + ').');
+      }
+    };
+    xhr.onerror = function() {
+      setButtonLoading('btnTest', false);
+      showResult('testResult', 'error', 'Connection failed. Check URL and ensure server is reachable.');
+    };
+    xhr.ontimeout = function() {
+      setButtonLoading('btnTest', false);
+      showResult('testResult', 'error', 'Connection timed out after 12 seconds.');
+    };
+    xhr.send();
+  }
+
+  function doRefresh() {
+    clearResult('refreshResult');
+    setButtonLoading('btnRefresh', true);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/refresh', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      setButtonLoading('btnRefresh', false);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        var data;
+        try { data = JSON.parse(xhr.responseText); } catch(e) {}
+        var msg = (data && data.message) ? data.message : 'Refresh completed successfully.';
+        showResult('refreshResult', 'success', msg);
+        showToast('Refresh completed', 'success');
+        // Reload dashboard stats after a short delay
+        setTimeout(function() { window.location.reload(); }, 1200);
+      } else {
+        var err = 'Refresh failed (HTTP ' + xhr.status + ').';
+        try {
+          var d = JSON.parse(xhr.responseText);
+          if (d.detail) err = d.detail;
+        } catch(e) {}
+        showResult('refreshResult', 'error', err);
+        showToast(err, 'error');
+      }
+    };
+    xhr.onerror = function() {
+      setButtonLoading('btnRefresh', false);
+      showResult('refreshResult', 'error', 'Refresh request failed. Check server logs.');
+      showToast('Refresh failed', 'error');
+    };
+    xhr.send(JSON.stringify({}));
+  }
+
+  function doSaveConfig() {
+    clearResult('saveResult');
+    setButtonLoading('btnSave', true);
+
+    var payload = {
+      base_url: document.getElementById('base_url').value.trim().replace(/\/+$/, ''),
+      username: document.getElementById('username').value.trim(),
+      password: document.getElementById('password').value,
+      enable_vod: document.getElementById('enable_vod').checked,
+      enable_series: document.getElementById('enable_series').checked,
+      category_filters: document.getElementById('category_filters').value.trim(),
+      head_mode: document.getElementById('head_mode').value
+    };
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/config', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      setButtonLoading('btnSave', false);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        var data;
+        try { data = JSON.parse(xhr.responseText); } catch(e) {}
+        var msg = (data && data.message) ? data.message : 'Configuration saved successfully.';
+        showResult('saveResult', 'success', msg);
+        showToast('Configuration saved', 'success');
+        // Switch to dashboard to show updated state
+        setTimeout(function() { window.location.reload(); }, 900);
+      } else {
+        var err = 'Save failed (HTTP ' + xhr.status + ').';
+        try {
+          var d = JSON.parse(xhr.responseText);
+          if (d.detail) err = d.detail;
+        } catch(e) {}
+        showResult('saveResult', 'error', err);
+        showToast(err, 'error');
+      }
+    };
+    xhr.onerror = function() {
+      setButtonLoading('btnSave', false);
+      showResult('saveResult', 'error', 'Save request failed. Check server logs.');
+      showToast('Save failed', 'error');
+    };
+    xhr.send(JSON.stringify(payload));
+  }
+</script>
+
+</body>
+</html>

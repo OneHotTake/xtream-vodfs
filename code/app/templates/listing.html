@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head><title>{{ title }}</title>
+<style>body{font-family:monospace;margin:20px}h1{font-size:18px;margin-bottom:20px}hr{border:0;border-top:1px solid #ccc;margin:20px 0}pre{font-family:monospace;font-size:14px;line-height:1.5}a{color:#0066cc;text-decoration:none}a:hover{text-decoration:underline}</style>
+</head>
+<body>
+<h1>{{ title }}</h1>
+<hr>
+<pre>
+{% for entry in entries %}
+        <a href="{{ entry.href }}">{{ entry.name }}</a>
+{% endfor %}
+</pre>
+<hr>
+</body>
+</html>
