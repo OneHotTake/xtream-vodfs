@@ -132,23 +132,29 @@ start_rclone() {
     log_info "Creating mount point: $MOUNT_POINT"
     mkdir -p "$MOUNT_POINT"
     
+    # Configure rclone remote
+    log_info "Configuring rclone remote..."
+    RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
+    cat > "$RCLONE_CONFIG" <<EOF
+[xtream-vodfs]
+type = http
+url = http://$SERVER_HOST:$SERVER_PORT/fs/
+EOF
+    
     log_info "Starting rclone mount..."
     
     # Mount with recommended settings
-    nohup rclone mount http:$MOUNT_POINT \
-        --url "http://$SERVER_HOST:$SERVER_PORT/fs/" \
+    nohup rclone mount xtream-vodfs: "$MOUNT_POINT" \
         --vfs-cache-mode full \
         --dir-cache-time 12h \
-        --poll-interval 0 \
         --cache-dir "$PROJECT_ROOT/.rclone-cache" \
         --log-level INFO \
         --log-file "$PROJECT_ROOT/rclone.log" \
         --daemon \
-        --pid-file "$RCLONE_PID_FILE" \
-        > /dev/null 2>&1 || true
+        2>&1 || true
     
-    # rclone daemon mode doesn't create PID file properly, so we do it manually
-    sleep 2
+    # Wait for mount to be ready
+    sleep 3
     
     # Check if mount is active
     if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
@@ -210,13 +216,17 @@ start() {
         exit 1
     fi
     
-    # Rclone mount is optional - try but don't fail if it doesn't work
-    log_warn "Rclone mount skipped (requires manual configuration)"
-    log_info "To mount manually: rclone mount http:/tmp/xtream-vodfs-mount --url http://$SERVER_HOST:$SERVER_PORT/fs/"
+    start_rclone
+    if [ $? -ne 0 ]; then
+        log_error "Failed to start rclone mount"
+        stop_server
+        exit 1
+    fi
     
     log_info "========================================="
     log_info "xtream-vodfs is running!"
     log_info "Server: http://$SERVER_HOST:$SERVER_PORT"
+    log_info "Mount:  $MOUNT_POINT"
     log_info "========================================="
     log_info ""
     log_info "Use './scripts/xtream-vodfs.sh stop' to stop"
