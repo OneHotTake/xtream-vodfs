@@ -15,7 +15,7 @@ MOUNT_POINT="/tmp/xtream-vodfs-mount"
 SERVER_PID_FILE="$PID_DIR/server.pid"
 RCLONE_PID_FILE="$PID_DIR/rclone.pid"
 SERVER_PORT=18080
-SERVER_HOST="127.0.0.1"
+SERVER_HOST="0.0.0.0"
 
 # Colors for output
 RED='\033[0;31m'

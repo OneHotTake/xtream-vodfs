@@ -25,7 +25,7 @@ from app.metadata_cache import MetadataCache, get_metadata_cache
 from app.xtream import XtreamClient, validate_credentials
 from app.proxy import stream_vod_from_node, get_rate_limiter
 from app.warmer import MetadataWarmer
-from app.models import NodeType
+from app.models import NodeType, XtreamCredentials
 
 
 app = FastAPI(title="xtream-vodfs", description="Local HTTP virtual filesystem for Xtream Codes VOD and Series", version="0.3.0 (Sprint 3)")
@@ -187,20 +187,15 @@ async def root(request: Request):
     html = f"""<!doctype html>
 <html>
 <head>
-    <title>xtream-vodfs - Sprint 2</title>
+    <title>xtream-vodfs - Sprint 3</title>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;max-width:900px;margin:40px auto;padding:20px;line-height:1.6}}
         h1 {{color:#333;border-bottom:2px solid #007bff;padding-bottom:10px}}
         .status {{background:#d4edda;color:#155724;padding:15px;border-radius:5px;margin:20px 0}}
         .status.not-configured {{background:#fff3cd;color:#856404}}
         .info {{background:#f8f9fa;padding:15px;border-radius:5px;margin:20px 0;border:1px solid #dee2e6}}
-        .form-group {{margin-bottom:15px}}
-        label {{display:block;margin-bottom:5px;font-weight:600}}
-        input[type="text"], input[type="password"] {{width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}}
-        button {{background:#007bff;color:#fff;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;font-size:16px}}
-        button:hover {{background:#0056b3}}
-        button:disabled {{background:#6c757d;cursor:not-allowed}}
         .links {{margin:20px 0}}
         .links a {{display:block;margin:8px 0;color:#0066cc;text-decoration:none}}
         .links a:hover {{text-decoration:underline}}
@@ -208,10 +203,71 @@ async def root(request: Request):
         .stat {{background:#e9ecef;padding:15px;border-radius:5px;text-align:center}}
         .stat-value {{font-size:2em;font-weight:bold;color:#007bff}}
         .stat-label {{color:#666;font-size:0.9em}}
+
+        /* Provider Management Styles */
+        .section-header {{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px}}
+        .provider-count {{font-size:0.82rem;font-weight:600;color:#6c757d;background:#e9ecef;padding:3px 10px;border-radius:999px}}
+        .provider-list {{display:flex;flex-direction:column;gap:12px;margin-bottom:16px}}
+        .provider-card {{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:14px;transition:box-shadow 0.2s,border-color 0.2s,opacity 0.2s;position:relative}}
+        .provider-card:hover {{box-shadow:0 4px 12px rgba(0,0,0,0.1);border-color:#007bff}}
+        .provider-card.disabled {{opacity:0.65}}
+        .provider-card.editing {{border-color:#52b34b;box-shadow:0 0 0 3px rgba(82,181,75,0.1)}}
+        .provider-card.confirm-delete {{border-color:#dc3545;background:#fff5f5}}
+        .provider-icon {{width:40px;height:40px;border-radius:6px;background:#e8f5e9;color:#52b34b;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;flex-shrink:0;text-transform:uppercase}}
+        .provider-info {{flex:1;min-width:0}}
+        .provider-name {{font-size:0.95rem;font-weight:700;color:#212529;margin:0 0 2px;display:flex;align-items:center;gap:8px}}
+        .provider-url {{font-size:0.82rem;color:#6c757d;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+        .provider-status-dot {{width:8px;height:8px;border-radius:50%;display:inline-block}}
+        .provider-status-dot.active {{background:#52b34b}}
+        .provider-status-dot.inactive {{background:#6c757d}}
+        .provider-meta {{display:flex;align-items:center;gap:12px;flex-shrink:0;flex-wrap:wrap}}
+        .toggle-switch {{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:0.82rem;font-weight:600;color:#495057;user-select:none}}
+        .toggle-switch input {{position:absolute;opacity:0;width:0;height:0}}
+        .toggle-slider {{width:36px;height:20px;background:#6c757d;border-radius:999px;position:relative;transition:background 0.2s;flex-shrink:0}}
+        .toggle-slider::after {{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}}
+        .toggle-switch input:checked + .toggle-slider {{background:#52b34b}}
+        .toggle-switch input:checked + .toggle-slider::after {{transform:translateX(16px)}}
+        .card-actions {{display:flex;align-items:center;gap:6px}}
+        .btn {{background:#007bff;color:#fff;padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-size:14px}}
+        .btn:hover {{background:#0056b3}}
+        .btn:disabled {{background:#6c757d;cursor:not-allowed}}
+        .btn-primary {{background:#007bff}}
+        .btn-secondary {{background:#6c757d}}
+        .btn-secondary:hover {{background:#545b62}}
+        .btn-danger {{background:#dc3545}}
+        .btn-danger:hover {{background:#c82333}}
+        .btn-icon {{padding:6px 10px}}
+        .delete-confirm-text {{font-size:0.88rem;font-weight:700;color:#dc3545;margin-right:8px}}
+        .empty-state {{text-align:center;padding:40px 20px;color:#6c757d}}
+        .empty-state-icon {{font-size:3rem;margin-bottom:16px}}
+        .empty-state-title {{font-size:1.1rem;font-weight:700;color:#212529;margin-bottom:8px}}
+        .provider-form-wrap {{animation:fadeIn 0.25s ease;margin-top:4px}}
+        .provider-form-card {{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}}
+        .form-card-title {{margin:0 0 18px;font-size:1rem;font-weight:700}}
+        .form-group {{margin-bottom:15px}}
+        .form-row {{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+        @media (max-width: 600px) {{.form-row {{grid-template-columns:1fr;gap:0}}}}
+        label {{display:block;margin-bottom:5px;font-weight:600;color:#495057}}
+        input[type="text"], input[type="password"] {{width:100%;padding:8px;border:1px solid #dee2e6;border-radius:4px;box-sizing:border-box}}
+        .form-hint {{font-size:0.82rem;color:#6c757d;margin-top:4px}}
+        .form-error {{font-size:0.82rem;color:#dc3545;margin-top:6px;min-height:1.2em;font-weight:600}}
+        .form-error:empty {{display:none}}
+        .required {{color:#dc3545;font-weight:700}}
+        .form-actions {{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:4px}}
+        .form-actions-right {{display:flex;align-items:center;gap:10px}}
+        .add-provider-trigger {{margin-top:4px}}
+        .test-result {{margin-top:12px;padding:10px;border-radius:4px;font-size:0.9em}}
+        .test-result.success {{background:#d4edda;color:#155724}}
+        .test-result.error {{background:#f8d7da;color:#721c24}}
+        @keyframes fadeIn {{from {{opacity:0}} to {{opacity:1}}}}
+        .spinner {{display:inline-block;width:12px;height:12px;border:2px solid #fff;border-radius:50%;border-top-color:transparent;animation:spin 0.6s linear infinite;vertical-align:middle;margin-right:6px}}
+        .spinner {{display:none}}
+        .btn.loading .spinner {{display:inline-block}}
+        @keyframes spin {{to {{transform:rotate(360deg)}}}}
     </style>
 </head>
 <body>
-<h1>xtream-vodfs - Sprint 2</h1>
+<h1>xtream-vodfs - Sprint 3</h1>
 <div class="status {'not-configured' if not is_configured else ''}">
     <strong>Status:</strong> {'' if is_configured else 'Not '}Configured
 </div>
@@ -226,24 +282,71 @@ async def root(request: Request):
     </div>
 </div>
 <div class="info">
-    <h3>Configuration</h3>
-    <form method="post" action="/config">
-        <div class="form-group">
-            <label for="base_url">Xtream Base URL:</label>
-            <input type="text" id="base_url" name="base_url" placeholder="http://example.com:8080" value="{config.xtream.base_url if config and config.xtream.base_url else ''}" required>
+    <h3>Xtream Providers</h3>
+    <div class="section-header">
+        <span class="provider-count" id="providerCount">Loading...</span>
+    </div>
+    <div id="providerList" class="provider-list">
+        <div style="text-align:center;color:#6c757d;padding:20px;">Loading providers...</div>
+    </div>
+    <div id="providerEmpty" class="empty-state" style="display:none;">
+        <div class="empty-state-icon">&#128225;</div>
+        <div class="empty-state-title">No providers configured</div>
+        <p>Add your first Xtream provider to start building the virtual filesystem.</p>
+    </div>
+    <div id="providerFormWrap" class="provider-form-wrap" style="display:none;">
+        <div class="provider-form-card">
+            <h3 class="form-card-title" id="formTitle">Add Provider</h3>
+            <form id="providerForm" onsubmit="return false;" novalidate>
+                <div class="form-group">
+                    <label for="p_provider_name">Provider Name <span class="required">*</span></label>
+                    <input id="p_provider_name" name="provider_name" type="text" placeholder="e.g. super-iptv" autocomplete="off">
+                    <div class="form-hint">Used in filesystem paths. Lowercase letters, numbers, hyphens, underscores only.</div>
+                    <div class="form-error" id="err_provider_name"></div>
+                </div>
+                <div class="form-group">
+                    <label for="p_base_url">Server URL <span class="required">*</span></label>
+                    <input id="p_base_url" name="base_url" type="text" placeholder="http://example.com:8080" autocomplete="off">
+                    <div class="form-hint">Base URL without trailing slash.</div>
+                    <div class="form-error" id="err_base_url"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="p_username">Username <span class="required">*</span></label>
+                        <input id="p_username" name="username" type="text" autocomplete="off">
+                        <div class="form-error" id="err_username"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="p_password">Password <span class="required">*</span></label>
+                        <input id="p_password" name="password" type="password" autocomplete="off">
+                        <div class="form-error" id="err_password"></div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="btnTestProvider" class="btn btn-secondary" onclick="testProviderConnection()">
+                        <span class="spinner"></span>
+                        <span class="btn-text">Test Connection</span>
+                    </button>
+                    <div class="form-actions-right">
+                        <button type="button" class="btn btn-secondary" onclick="cancelProviderForm()">Cancel</button>
+                        <button type="button" id="btnSaveProvider" class="btn btn-primary" onclick="saveProvider()">
+                            <span class="spinner"></span>
+                            <span class="btn-text">Save Provider</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="providerTestResult"></div>
+            </form>
         </div>
-        <div class="form-group">
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" placeholder="your_username" value="{config.xtream.username if config and config.xtream.username else ''}" required>
-        </div>
-        <div class="form-group">
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" placeholder="your_password" value="{config.xtream.password if config and config.xtream.password else ''}" required>
-        </div>
-        <button type="submit">Save & Validate Credentials</button>
-    </form>
+    </div>
+    <div id="addProviderTrigger" class="add-provider-trigger">
+        <button type="button" class="btn btn-primary" onclick="showAddProviderForm()">
+            <span style="font-size:1.1em;line-height:1;">+</span>
+            <span>Add Provider</span>
+        </button>
+    </div>
     <form method="post" action="/refresh" style="margin-top: 20px;">
-        <button type="submit" {'disabled' if not is_configured else ''}>Refresh VOD Cache</button>
+        <button type="submit" class="btn btn-secondary" {'disabled' if not is_configured else ''}>Refresh VOD Cache</button>
     </form>
     <p style="margin-top: 15px; color: #666; font-size: 0.9em;">
         Last refresh: {last_refresh}
@@ -260,6 +363,228 @@ async def root(request: Request):
     <h3>Health Check:</h3>
     <p><a href="/healthz">/healthz</a> - JSON status</p>
 </div>
+<script>
+var providers = [];
+var editingProviderName = null;
+var API = {{list: '/api/providers', create: '/api/providers', update: function(name) {{ return '/api/providers/' + encodeURIComponent(name); }}, remove: function(name) {{ return '/api/providers/' + encodeURIComponent(name); }}, test: null}};
+
+function escapeHtml(s) {{ return s.replace(/&/g, '&amp;amp;').replace(/</g, '&amp;lt;').replace(/>/g, '&amp;gt;').replace(/"/g, '&amp;quot;').replace(/'/g, '&#x27;'); }}
+
+function loadProviders() {{
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', API.list, true);
+    xhr.onload = function() {{
+        if (xhr.status >= 200 &amp;&amp; xhr.status < 300) {{
+            try {{ providers = JSON.parse(xhr.responseText); }} catch(e) {{ providers = []; }}
+            renderProviderList();
+        }} else {{ document.getElementById('providerList').innerHTML = '<div style="text-align:center;color:#dc3545;padding:20px;">Failed to load providers</div>'; }}
+    }};
+    xhr.onerror = function() {{ document.getElementById('providerList').innerHTML = '<div style="text-align:center;color:#dc3545;padding:20px;">Failed to load providers</div>'; }};
+    xhr.send();
+}}
+
+function renderProviderList() {{
+    var listEl = document.getElementById('providerList');
+    var emptyEl = document.getElementById('providerEmpty');
+    var countEl = document.getElementById('providerCount');
+    listEl.innerHTML = '';
+    countEl.textContent = providers.length + ' configured';
+    if (providers.length === 0) {{
+        emptyEl.style.display = 'block';
+        return;
+    }}
+    emptyEl.style.display = 'none';
+    providers.forEach(function(p) {{
+        var card = document.createElement('div');
+        card.className = 'provider-card' + (p.enabled === false ? ' disabled' : '');
+        if (editingProviderName === p.provider_name) card.classList.add('editing');
+        var initials = (p.provider_name || '?').substring(0, 2);
+        card.innerHTML =
+            '<div class="provider-icon">' + escapeHtml(initials) + '</div>' +
+            '<div class="provider-info">' +
+                '<p class="provider-name">' +
+                    '<span class="provider-status-dot ' + (p.enabled !== false ? 'active' : 'inactive') + '"></span> ' +
+                    escapeHtml(p.provider_name) +
+                '</p>' +
+                '<p class="provider-url">' + escapeHtml(p.base_url || '') + '</p>' +
+            '</div>' +
+            '<div class="provider-meta">' +
+                '<label class="toggle-switch" title="Enable or disable this provider">' +
+                    '<input type="checkbox" ' + (p.enabled !== false ? 'checked' : '') + ' onchange="toggleProviderEnabled(\\'' + escapeHtml(p.provider_name) + '\\', this.checked)">' +
+                    '<span class="toggle-slider"></span>' +
+                    '<span>' + (p.enabled !== false ? 'Enabled' : 'Disabled') + '</span>' +
+                '</label>' +
+                '<div class="card-actions">' +
+                    '<button type="button" class="btn btn-secondary btn-icon" title="Edit" onclick="editProvider(\\'' + escapeHtml(p.provider_name) + \\')">&#9998;</button>' +
+                    '<button type="button" class="btn btn-danger btn-icon" title="Delete" onclick="promptDeleteProvider(this, \\'' + escapeHtml(p.provider_name) + \\')">&#128465;</button>' +
+                '</div>' +
+            '</div>';
+        listEl.appendChild(card);
+    }});
+}}
+
+function showAddProviderForm() {{
+    editingProviderName = null;
+    clearProviderForm();
+    document.getElementById('formTitle').textContent = 'Add Provider';
+    document.getElementById('providerFormWrap').style.display = 'block';
+    document.getElementById('addProviderTrigger').style.display = 'none';
+    clearResult('providerTestResult');
+    renderProviderList();
+}}
+
+function editProvider(name) {{
+    var p = providers.find(function(x) {{ return x.provider_name === name; }});
+    if (!p) return;
+    editingProviderName = name;
+    document.getElementById('p_provider_name').value = p.provider_name || '';
+    document.getElementById('p_base_url').value = p.base_url || '';
+    document.getElementById('p_username').value = p.username || '';
+    document.getElementById('p_password').value = p.password || '';
+    document.getElementById('formTitle').textContent = 'Edit Provider';
+    document.getElementById('providerFormWrap').style.display = 'block';
+    document.getElementById('addProviderTrigger').style.display = 'none';
+    clearAllProviderErrors();
+    clearResult('providerTestResult');
+    renderProviderList();
+}}
+
+function cancelProviderForm() {{
+    document.getElementById('providerFormWrap').style.display = 'none';
+    document.getElementById('addProviderTrigger').style.display = 'block';
+    editingProviderName = null;
+    renderProviderList();
+}}
+
+function clearProviderForm() {{
+    document.getElementById('p_provider_name').value = '';
+    document.getElementById('p_base_url').value = '';
+    document.getElementById('p_username').value = '';
+    document.getElementById('p_password').value = '';
+    clearAllProviderErrors();
+}}
+
+function clearAllProviderErrors() {{
+    ['err_provider_name','err_base_url','err_username','err_password'].forEach(function(id) {{ document.getElementById(id).textContent = ''; }});
+}}
+
+function validateProviderForm() {{
+    clearAllProviderErrors();
+    var valid = true;
+    var name = document.getElementById('p_provider_name').value.trim();
+    var url = document.getElementById('p_base_url').value.trim();
+    var username = document.getElementById('p_username').value.trim();
+    var password = document.getElementById('p_password').value;
+    if (!name) {{ document.getElementById('err_provider_name').textContent = 'Provider name is required.'; valid = false; }}
+    else if (!/^[a-z0-9_-]+$/.test(name)) {{ document.getElementById('err_provider_name').textContent = 'Use lowercase letters, numbers, hyphens, underscores only.'; valid = false; }}
+    else if (!editingProviderName &amp;&amp; providers.some(function(p){{ return p.provider_name === name; }})) {{ document.getElementById('err_provider_name').textContent = 'A provider with this name already exists.'; valid = false; }}
+    if (!url) {{ document.getElementById('err_base_url').textContent = 'Server URL is required.'; valid = false; }}
+    else if (!/^https?:\\/\\/.+/.test(url)) {{ document.getElementById('err_base_url').textContent = 'Enter a valid URL starting with http:// or https://.'; valid = false; }}
+    if (!username) {{ document.getElementById('err_username').textContent = 'Username is required.'; valid = false; }}
+    if (!password) {{ document.getElementById('err_password').textContent = 'Password is required.'; valid = false; }}
+    return valid ? {{ provider_name: name, base_url: url.replace(/\\/+$/, ''), username: username, password: password, enabled: true }} : null;
+}}
+
+function setButtonLoading(btnId, loading) {{
+    var btn = document.getElementById(btnId);
+    if (loading) btn.classList.add('loading');
+    else btn.classList.remove('loading');
+}}
+
+function clearResult(id) {{ var el = document.getElementById(id); el.innerHTML = ''; el.className = ''; }}
+
+function showResult(id, type, msg) {{ var el = document.getElementById(id); el.innerHTML = msg; el.className = 'test-result ' + type; }}
+
+function saveProvider() {{
+    var payload = validateProviderForm();
+    if (!payload) return;
+    setButtonLoading('btnSaveProvider', true);
+    clearResult('providerTestResult');
+    var xhr = new XMLHttpRequest();
+    var isEdit = editingProviderName !== null;
+    var url = isEdit ? API.update(editingProviderName) : API.create;
+    xhr.open(isEdit ? 'PUT' : 'POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {{
+        setButtonLoading('btnSaveProvider', false);
+        if (xhr.status >= 200 &amp;&amp; xhr.status < 300) {{
+            cancelProviderForm();
+            loadProviders();
+        }} else {{ var err = 'Save failed.'; try {{ var d = JSON.parse(xhr.responseText); if (d.detail) err = d.detail; }} catch(e) {{}} showResult('providerTestResult', 'error', err); }}
+    }};
+    xhr.onerror = function() {{ setButtonLoading('btnSaveProvider', false); showResult('providerTestResult', 'error', 'Request failed. Check server logs.'); }};
+    xhr.send(JSON.stringify(payload));
+}}
+
+function promptDeleteProvider(btn, name) {{
+    var card = btn.closest('.provider-card');
+    if (card.classList.contains('confirm-delete')) {{ doDeleteProvider(name); }}
+    else {{
+        card.classList.add('confirm-delete');
+        var actions = card.querySelector('.card-actions');
+        actions.innerHTML =
+            '<span class="delete-confirm-text">Delete?</span>' +
+            '<button type="button" class="btn btn-danger btn-icon" onclick="doDeleteProvider(\\'' + escapeHtml(name) + \\')">Yes</button>' +
+            '<button type="button" class="btn btn-secondary btn-icon" onclick="cancelDeleteProvider(this)">No</button>';
+    }}
+}}
+
+function cancelDeleteProvider(btn) {{
+    var card = btn.closest('.provider-card');
+    card.classList.remove('confirm-delete');
+    var actions = card.querySelector('.card-actions');
+    actions.innerHTML =
+        '<button type="button" class="btn btn-secondary btn-icon" title="Edit" onclick="editProvider(\\'' + escapeHtml(card.querySelector('.provider-name').textContent.trim()) + \\')">&#9998;</button>' +
+        '<button type="button" class="btn btn-danger btn-icon" title="Delete" onclick="promptDeleteProvider(this, \\'' + escapeHtml(card.querySelector('.provider-name').textContent.trim()) + \\')">&#128465;</button>';
+}}
+
+function doDeleteProvider(name) {{
+    var xhr = new XMLHttpRequest();
+    xhr.open('DELETE', API.remove(name), true);
+    xhr.onload = function() {{
+        if (xhr.status >= 200 &amp;&amp; xhr.status < 300) loadProviders();
+    }};
+    xhr.send();
+}}
+
+function toggleProviderEnabled(name, enabled) {{
+    var p = providers.find(function(x) {{ return x.provider_name === name; }});
+    if (!p) return;
+    p.enabled = enabled;
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', API.update(name), true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {{ if (xhr.status >= 200 &amp;&amp; xhr.status < 300) loadProviders(); else loadProviders(); }};
+    xhr.onerror = function() {{ loadProviders(); }};
+    xhr.send(JSON.stringify(p));
+}}
+
+function testProviderConnection() {{
+    clearResult('providerTestResult');
+    var url = document.getElementById('p_base_url').value.trim().replace(/\\/+$/, '');
+    var username = document.getElementById('p_username').value.trim();
+    var password = document.getElementById('p_password').value;
+    if (!url || !username || !password) {{ showResult('providerTestResult', 'error', 'Fill in URL, Username, and Password to test.'); return; }}
+    setButtonLoading('btnTestProvider', true);
+    var testUrl = url + '/player_api.php?username=' + encodeURIComponent(username) + '&amp;password=' + encodeURIComponent(password);
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', testUrl, true);
+    xhr.timeout = 12000;
+    xhr.onload = function() {{
+        setButtonLoading('btnTestProvider', false);
+        if (xhr.status >= 200 &amp;&amp; xhr.status < 300) {{
+            try {{ var resp = JSON.parse(xhr.responseText); if (resp.user_info) {{ var status = resp.user_info.status || 'unknown'; var msg = 'Connected — status: ' + escapeHtml(status); if (resp.user_info.active_cons !== undefined) {{ msg += ', ' + resp.user_info.active_cons; if (resp.user_info.max_connections !== undefined) msg += '/' + resp.user_info.max_connections; msg += ' active streams'; }} showResult('providerTestResult', 'success', msg); }} else {{ showResult('providerTestResult', 'success', 'Connection successful!'); }} }} catch(e) {{ showResult('providerTestResult', 'success', 'Connection successful (non-JSON response).'); }}
+        }} else if (xhr.status === 401) {{ showResult('providerTestResult', 'error', 'Authentication failed (401). Check credentials.'); }}
+        else if (xhr.status === 404) {{ showResult('providerTestResult', 'error', 'API endpoint not found (404). Check base URL.'); }}
+        else {{ showResult('providerTestResult', 'error', 'Connection failed (HTTP ' + xhr.status + ').'); }}
+    }};
+    xhr.onerror = function() {{ setButtonLoading('btnTestProvider', false); showResult('providerTestResult', 'error', 'Connection failed. Check URL and ensure server is reachable.'); }};
+    xhr.ontimeout = function() {{ setButtonLoading('btnTestProvider', false); showResult('providerTestResult', 'error', 'Connection timed out after 12 seconds.'); }};
+    xhr.send();
+}}
+
+document.addEventListener('DOMContentLoaded', function() {{ loadProviders(); }});
+</script>
 </body>
 </html>"""
     return HTMLResponse(content=html)
@@ -274,7 +599,7 @@ async def save_config_route(
     movies_include_all: bool = Form(True),
     movies_include_categories: bool = Form(True)
 ):
-    """Save Xtream credentials and validate"""
+    """Save Xtream credentials and validate (legacy route for backward compatibility)"""
     global config
 
     try:
@@ -283,10 +608,31 @@ async def save_config_route(
 
         if success:
             # Update config
-            from app.config import XtreamCredentials, LibrarySettings
             if config is None:
                 config = Config()
-            config.xtream = XtreamCredentials(base_url=base_url, username=username, password=password)
+
+            # Migrate to providers list format
+            provider_name = "default-provider"
+            if not any(p.provider_name == provider_name for p in config.providers):
+                # Create new provider with default name
+                new_provider = XtreamCredentials(
+                    provider_name=provider_name,
+                    base_url=base_url,
+                    username=username,
+                    password=password,
+                    enabled=True
+                )
+                config.providers.append(new_provider)
+            else:
+                # Update existing default provider
+                for p in config.providers:
+                    if p.provider_name == provider_name:
+                        p.base_url = base_url
+                        p.username = username
+                        p.password = password
+                        p.enabled = True
+                        break
+
             config.library.enable_vod = enable_vod
             config.library.movies_include_all = movies_include_all
             config.library.movies_include_categories = movies_include_categories
@@ -332,6 +678,61 @@ async def healthz():
         "vod_streams": len(cache.vod_streams) if cache else 0
     }
 
+
+# ===== Provider Management API =====
+
+@app.get("/api/providers")
+async def api_list_providers():
+    """List all configured providers"""
+    cfg = config_manager.load() if config_manager else Config()
+    return [p.dict() for p in cfg.providers]
+
+
+@app.post("/api/providers")
+async def api_create_provider(provider: XtreamCredentials):
+    """Create a new provider"""
+    global config
+    if not config:
+        config = Config()
+
+    # Check for duplicate name
+    if any(p.provider_name == provider.provider_name for p in config.providers):
+        raise HTTPException(status_code=409, detail="Provider name already exists")
+
+    config.providers.append(provider)
+    save_config(config)
+    return provider
+
+
+@app.put("/api/providers/{name}")
+async def api_update_provider(name: str, provider: XtreamCredentials):
+    """Update an existing provider"""
+    global config
+    if not config:
+        config = Config()
+
+    for i, p in enumerate(config.providers):
+        if p.provider_name == name:
+            config.providers[i] = provider
+            save_config(config)
+            return provider
+
+    raise HTTPException(status_code=404, detail="Provider not found")
+
+
+@app.delete("/api/providers/{name}")
+async def api_delete_provider(name: str):
+    """Delete a provider"""
+    global config
+    if not config:
+        config = Config()
+
+    config.providers = [p for p in config.providers if p.provider_name != name]
+    save_config(config)
+    return {"ok": True}
+
+
+# ===== Filesystem Routes =====
 
 @app.get("/fs/", response_class=HTMLResponse)
 @app.get("/fs/{path:path}", response_class=HTMLResponse)

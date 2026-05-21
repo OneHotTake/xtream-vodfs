@@ -18,6 +18,7 @@ class XtreamCredentials(BaseModel):
     base_url: str = Field(default="", description="Xtream server base URL without trailing slash")
     username: str = Field(default="", description="Xtream username")
     password: str = Field(default="", description="Xtream password")
+    enabled: bool = Field(default=True, description="Whether this provider is active")
 
     @validator('provider_name')
     def sanitize_provider_name(cls, v):

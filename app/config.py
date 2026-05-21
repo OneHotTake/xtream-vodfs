@@ -84,10 +84,39 @@ class ConfigManager:
 
         self.config_file = self.config_dir / 'config.json'
         self._config: Optional[Config] = None
+        self._migration_run = False
 
     def _ensure_config_dir(self):
         """Ensure config directory exists"""
         self.config_dir.mkdir(parents=True, exist_ok=True)
+
+    def _run_migration(self, config: Config) -> Config:
+        """Migrate legacy single-provider config to providers list format"""
+        if self._migration_run:
+            return config
+
+        # Check if we have a legacy xtream config but no providers
+        if config.xtream.provider_name and config.xtream.base_url and not config.providers:
+            # Migrate to providers list
+            provider = XtreamCredentials(
+                provider_name=config.xtream.provider_name,
+                base_url=config.xtream.base_url,
+                username=config.xtream.username,
+                password=config.xtream.password,
+                enabled=True
+            )
+            config.providers.append(provider)
+            # Clear the old xtream field to avoid confusion
+            config.xtream = XtreamCredentials()
+            # Save the migrated config
+            try:
+                self.save(config)
+                print("Migrated legacy single-provider config to providers list format")
+            except Exception as e:
+                print(f"Warning: Failed to save migrated config: {e}")
+
+        self._migration_run = True
+        return config
 
     def load(self) -> Config:
         """Load config from file or return defaults"""
@@ -103,6 +132,8 @@ class ConfigManager:
             with open(self.config_file, 'r') as f:
                 data = json.load(f)
             self._config = Config(**data)
+            # Run migration if needed
+            self._run_migration(self._config)
         except (json.JSONDecodeError, pydantic.ValidationError) as e:
             # If config is corrupt, use defaults
             import logging
@@ -184,9 +215,10 @@ def is_multi_provider(config: Config) -> bool:
 
 
 def get_active_providers(config: Config) -> list[XtreamCredentials]:
-    """Return the list of active providers, handling single/multi modes."""
+    """Return the list of active (enabled) providers, handling single/multi modes."""
     if config.providers:
-        return config.providers
+        # Filter out disabled providers
+        return [p for p in config.providers if p.enabled]
     if config.xtream.provider_name and config.xtream.base_url:
         return [config.xtream]
     return []
