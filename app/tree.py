@@ -33,7 +33,7 @@ class VirtualTree:
         self._root = self._build_tree()
 
     def _build_tree(self) -> FSNode:
-        """Build the virtual tree combining VOD, series, and samples"""
+        """Build the virtual tree combining VOD and series"""
         children = []
 
         # Build movies section with Xtream VOD data
@@ -43,10 +43,6 @@ class VirtualTree:
         # Build series section (placeholder for Sprint 4)
         series = self._build_series_placeholder()
         children.append(series)
-
-        # Build samples section (Sprint 1 - works without config)
-        samples = self._build_samples_tree()
-        children.append(samples)
 
         return FSNode(
             name="",
@@ -468,28 +464,6 @@ class VirtualTree:
             type=NodeType.DIRECTORY,
             path="/series",
             children=[message]
-        )
-
-    def _build_samples_tree(self) -> FSNode:
-        """
-        Build /fs/samples/ tree from Sprint 1 (works without config).
-
-        Returns:
-            FSNode for /samples/ with sample files
-        """
-        hello = FSNode(
-            name="hello.txt",
-            type=NodeType.FILE,
-            path="/samples/hello.txt",
-            size=14,
-            last_modified=datetime(2024, 1, 1, 0, 0, 0)
-        )
-
-        return FSNode(
-            name="samples",
-            type=NodeType.DIRECTORY,
-            path="/samples",
-            children=[hello]
         )
 
     def resolve(self, path: str) -> Optional[FSNode]:
