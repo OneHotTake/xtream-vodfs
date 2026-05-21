@@ -3,14 +3,14 @@
 # xtream-vodfs startup script
 # Manages the FastAPI server and rclone mount
 #
-# Usage: ./run.sh [start|stop|restart|status]
+# Usage: ./scripts/xtream-vodfs.sh [start|stop|restart|status]
 #
 
 set -e
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PID_DIR="$SCRIPT_DIR/.pids"
+# Configuration - always use project root
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PID_DIR="$PROJECT_ROOT/.pids"
 MOUNT_POINT="/tmp/xtream-vodfs-mount"
 SERVER_PID_FILE="$PID_DIR/server.pid"
 RCLONE_PID_FILE="$PID_DIR/rclone.pid"
@@ -75,13 +75,13 @@ start_server() {
     
     log_info "Starting xtream-vodfs server on $SERVER_HOST:$SERVER_PORT..."
     
-    cd "$SCRIPT_DIR"
+    cd "$PROJECT_ROOT"
     
     # Start server in background with proper output redirection
     python3 -m uvicorn app.main:app \
         --host "$SERVER_HOST" \
         --port "$SERVER_PORT" \
-        > "$SCRIPT_DIR/server.log" 2>&1 &
+        > "$PROJECT_ROOT/server.log" 2>&1 &
     
     local pid=$!
     echo $pid > "$SERVER_PID_FILE"
@@ -91,9 +91,9 @@ start_server() {
     
     if is_server_running; then
         log_info "Server started successfully (PID: $(cat $SERVER_PID_FILE))"
-        log_info "Server logs: $SCRIPT_DIR/server.log"
+        log_info "Server logs: $PROJECT_ROOT/server.log"
     else
-        log_error "Server failed to start. Check $SCRIPT_DIR/server.log"
+        log_error "Server failed to start. Check $PROJECT_ROOT/server.log"
         rm -f "$SERVER_PID_FILE"
         return 1
     fi
@@ -140,9 +140,9 @@ start_rclone() {
         --vfs-cache-mode full \
         --dir-cache-time 12h \
         --poll-interval 0 \
-        --cache-dir "$SCRIPT_DIR/.rclone-cache" \
+        --cache-dir "$PROJECT_ROOT/.rclone-cache" \
         --log-level INFO \
-        --log-file "$SCRIPT_DIR/rclone.log" \
+        --log-file "$PROJECT_ROOT/rclone.log" \
         --daemon \
         --pid-file "$RCLONE_PID_FILE" \
         > /dev/null 2>&1 || true
@@ -158,13 +158,13 @@ start_rclone() {
             echo "$rclone_pid" > "$RCLONE_PID_FILE"
             log_info "Rclone mount started successfully (PID: $rclone_pid)"
             log_info "Mount point: $MOUNT_POINT"
-            log_info "Rclone logs: $SCRIPT_DIR/rclone.log"
+            log_info "Rclone logs: $PROJECT_ROOT/rclone.log"
         else
             log_error "Rclone mount process not found"
             return 1
         fi
     else
-        log_error "Rclone mount failed. Check $SCRIPT_DIR/rclone.log"
+        log_error "Rclone mount failed. Check $PROJECT_ROOT/rclone.log"
         return 1
     fi
 }
@@ -219,8 +219,8 @@ start() {
     log_info "Server: http://$SERVER_HOST:$SERVER_PORT"
     log_info "========================================="
     log_info ""
-    log_info "Use './run.sh stop' to stop"
-    log_info "Use './run.sh status' to check status"
+    log_info "Use './scripts/xtream-vodfs.sh stop' to stop"
+    log_info "Use './scripts/xtream-vodfs.sh status' to check status"
 }
 
 # Stop everything
@@ -250,7 +250,7 @@ status() {
     if is_server_running; then
         echo -e "Server: ${GREEN}Running${NC} (PID: $(cat $SERVER_PID_FILE))"
         echo "  URL:   http://$SERVER_HOST:$SERVER_PORT"
-        echo "  Logs:  $SCRIPT_DIR/server.log"
+        echo "  Logs:  $PROJECT_ROOT/server.log"
     else
         echo -e "Server: ${RED}Stopped${NC}"
     fi
@@ -258,7 +258,7 @@ status() {
     if is_rclone_running; then
         echo -e "Mount:  ${GREEN}Running${NC} (PID: $(cat $RCLONE_PID_FILE))"
         echo "  Path:  $MOUNT_POINT"
-        echo "  Logs:  $SCRIPT_DIR/rclone.log"
+        echo "  Logs:  $PROJECT_ROOT/rclone.log"
     else
         echo -e "Mount:  ${RED}Stopped${NC}"
     fi

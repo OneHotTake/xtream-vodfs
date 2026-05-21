@@ -43,42 +43,64 @@ uv pip install -e ".[dev]"
 The easiest way to run xtream-vodfs is using the provided startup script:
 
 ```bash
-# Start the server and mount with rclone
-./run.sh start
+# Start the server
+./scripts/xtream-vodfs.sh start
 
 # Check status
-./run.sh status
+./scripts/xtream-vodfs.sh status
 
-# Stop everything
-./run.sh stop
+# Stop the server
+./scripts/xtream-vodfs.sh stop
 
-# Restart
-./run.sh restart
+# Restart the server
+./scripts/xtream-vodfs.sh restart
 ```
 
 The script will:
-- Start the FastAPI server on http://127.0.0.1:8080
-- Mount the virtual filesystem to `/tmp/xtream-vodfs-mount` using rclone
+- Start the FastAPI server on http://127.0.0.1:18080
 - Track PIDs for proper cleanup
-- Save logs to `server.log` and `rclone.log`
+- Save logs to `server.log` and `rclone.log` at the project root
+- Mounting the virtual filesystem with rclone is optional (see below)
 
-After starting, you can browse the mount:
+After starting, you can browse the server directly:
 
 ```bash
+curl http://127.0.0.1:18080/fs/
+```
+
+### Optional: Rclone Mount
+
+To mount the virtual filesystem using rclone:
+
+```bash
+# First, start the server
+./scripts/xtream-vodfs.sh start
+
+# Then mount with rclone
+rclone mount http:/tmp/xtream-vodfs-mount \
+  --url http://127.0.0.1:18080/fs/ \
+  --vfs-cache-mode full \
+  --dir-cache-time 12h \
+  --cache-dir .rclone-cache
+
+# Browse the mount
 ls -la /tmp/xtream-vodfs-mount/
 ls -la /tmp/xtream-vodfs-mount/movies/
+
+# Unmount when done
+fusermount -u /tmp/xtream-vodfs-mount
 ```
 
 Alternatively, start the FastAPI server directly:
 
 ```bash
 cd /home/onehottake/Projects/xtream-vodfs
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
+uvicorn app.main:app --reload --host 127.0.0.1 --port 18080
 ```
 
-The server will start at `http://127.0.0.1:8080`.
+The server will start at `http://127.0.0.1:18080`.
 
-On first run, the server creates a `config/config.json` file. Configure your Xtream providers by editing this file (see [Multi-Provider Configuration](#1-multi-provider-support)) or use the web UI at `http://127.0.0.1:8080/`.
+On first run, the server creates a `config/config.json` file. Configure your Xtream providers by editing this file (see [Multi-Provider Configuration](#1-multi-provider-support)) or use the web UI at `http://127.0.0.1:18080/`.
 
 ### Environment Variables
 
